@@ -1,0 +1,61 @@
+const WebSocket = require("ws");
+const PORT = process.env.PORT || 10000;
+
+const wss = new WebSocket.Server({ port: PORT });
+
+let clients = new Set();
+
+function now() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function broadcast(obj) {
+  const msg = JSON.stringify(obj);
+  for (let ws of clients) {
+    try { ws.send(msg); } catch {}
+  }
+}
+
+wss.on("connection", ws => {
+  clients.add(ws);
+
+  broadcast({
+    type: "system",
+    text: "Someone joined the chat.",
+    online: clients.size
+  });
+
+  ws.on("message", raw => {
+    let data;
+    try { data = JSON.parse(raw); } catch { return; }
+
+    if (data.type === "join") {
+      broadcast({
+        type: "system",
+        text: `${data.username} joined.`,
+        online: clients.size
+      });
+    }
+
+    if (data.type === "message") {
+      broadcast({
+        type: "message",
+        username: data.username,
+        channel: data.channel,
+        text: data.text,
+        time: now()
+      });
+    }
+  });
+
+  ws.on("close", () => {
+    clients.delete(ws);
+    broadcast({
+      type: "system",
+      text: "Someone left the chat.",
+      online: clients.size
+    });
+  });
+});
+
+console.log("WebSocket server running on port", PORT);
